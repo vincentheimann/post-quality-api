@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       Post Quality API
- * Plugin URI:        https://github.com/your-repo/post-quality-api
+ * Plugin URI:        https://github.com/vincentheimann/post-quality-api
  * Description:       REST endpoint exposing post content, metadata and Yoast SEO scores for external integrations (n8n, Zapier, Make, etc.).
  * Version:           1.0.0
  * Requires at least: 6.0
