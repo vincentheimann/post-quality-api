@@ -64,7 +64,7 @@ function pqa_get_route_args(): array
             'default' => 'post',
             'description' => 'Post type to query. Defaults to "post".',
             'sanitize_callback' => 'sanitize_key',
-            'validate_callback' => fn($value) => post_type_exists($value),
+            'validate_callback' => fn($value) => post_type_exists($value) && is_post_type_viewable($value),
         ],
     ];
 }
@@ -96,8 +96,23 @@ function pqa_post_score_callback(WP_REST_Request $request): WP_REST_Response|WP_
         );
     }
 
-    $post = $query->posts[0];
-    $id = $post->ID;
+    $queried_post = $query->posts[0];
+    $id = $queried_post->ID;
+
+    // Security & Best Practice: Prevent IDOR by verifying granular read capability
+    if (!current_user_can('read_post', $id)) {
+        return new WP_Error(
+            'pqa_forbidden',
+            'You do not have permission to read this post.',
+            ['status' => rest_authorization_required_code()]
+        );
+    }
+
+    // Best Practice: Setup global post data safely for 'the_content' filter (shortcodes)
+    global $post;
+    $original_post = $post;
+    $post = $queried_post;
+    setup_postdata($post);
 
     $content_html = get_post_field('post_content', $id);
     $content_plain = wp_strip_all_tags(apply_filters('the_content', $content_html));
@@ -106,12 +121,20 @@ function pqa_post_score_callback(WP_REST_Request $request): WP_REST_Response|WP_
         ? wp_strip_all_tags(get_the_excerpt($id))
         : wp_trim_words($content_plain, 55, '...');
 
+    // Restore original post data
+    $post = $original_post;
+    if ($post) {
+        setup_postdata($post);
+    } else {
+        wp_reset_postdata();
+    }
+
     $yoast_active = pqa_is_yoast_active();
 
     $data = [
         'id' => $id,
-        'slug' => $post->post_name,
-        'post_type' => $post->post_type,
+        'slug' => $queried_post->post_name,
+        'post_type' => $queried_post->post_type,
         'title' => html_entity_decode(get_the_title($id), ENT_QUOTES, 'UTF-8'),
         'link' => get_permalink($id),
         'excerpt' => $excerpt,
